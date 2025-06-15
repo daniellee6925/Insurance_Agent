@@ -47,7 +47,7 @@ def validator_node(state: InsuranceAgentState) -> Command[Literal["supervisor", 
         print("--- Transition to END ---")
         goto = END
     else:
-        print("--- Workflow Transition: Validator -> Supervisor ---")
+        print(f"--- Workflow Transition: Validator -> {goto.capitalize()}  ---")
 
     return Command(
         update={

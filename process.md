@@ -107,7 +107,7 @@ insurance_agent/
 │   ├── enhancer.py
 │   ├── validator.py
 │   ├── rag.py
-│   ├── search.py
+│   ├── researcher.py
 │   ├── actuary.py
 │   ├── consultant.py
 │   └── underwriter.py
@@ -119,9 +119,7 @@ insurance_agent/
 │   ├── enhancer_prompt.txt
 │   ├── validator_prompt.txt
 │   └── consultant_prompt.txt
-├── graph/
-│   ├── __init__.py
-│   └── main_graph.py
+├── main.py
 ├── state.py
 ├── config.py
 ├── requirements.txt

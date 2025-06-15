@@ -1,3 +1,11 @@
+"""
+researcher.py
+
+Defines the Researcher agent, responsible for gathering relevant, accurate, and up-to-date information
+using external search tools. This agent focuses on collecting factual data to support responses,
+without providing analysis or recommendations. After research, findings are passed to the Validator agent for review.
+"""
+
 from typing import Literal
 from langgraph.types import Command
 from langchain.schema import HumanMessage
@@ -11,7 +19,7 @@ from llm import llm
 tavily_search = TavilySearchResults(max_results=4)
 
 # Load system prompt
-prompt_path = Path(__file__).parent / "../prompts/validator_prompt.txt"
+prompt_path = Path(__file__).parent / "../prompts/researcher_prompt.txt"
 system_prompt = prompt_path.read_text()
 
 

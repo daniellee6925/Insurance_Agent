@@ -7,15 +7,16 @@ It defines
 """
 
 from typing import List, Dict, Optional, Any
-from langgraph.graph import State
+from pydantic import BaseModel, Field
+from langchain_core.messages import BaseMessage
 
 # Each message in the conversation history follows ChatOpenAI format - {"role": "user", "content": "..."}
 ChatMessage = Dict[str, str]
 
 
-class InsuranceAgentState(State):
+class InsuranceAgentState(BaseModel):
     # Full chat history between user and assistant
-    messages: List[ChatMessage] = []
+    messages: list[BaseMessage] = Field(default_factory=list)
 
     # Original user question
     user_question: Optional[str] = None
@@ -41,6 +42,8 @@ class InsuranceAgentState(State):
 
     # Underwriting decision or risk level
     risk_assessment: Optional[str] = None
+    user_info: Dict[str, str] = Field(default_factory=dict)  # [REQUIRED_FIELDS, ANSWER]
+    next_field: Optional[str] = None  # Track the field currently being asked
 
     # Extra info or routing/debugging data
     metadata: Dict[str, Any] = {}
