@@ -1,7 +1,18 @@
 # Multi-Agent Insurance Assistant with LangGraph
 
-## Objective
-Create a LangGraph-based multi-agent system to assist users with insurance-related queries. A central **Supervisor Agent** routes user queries to specialized agents.
+This application is a multi-agent system built to assist users in navigating health insurance-related topics. It routes tasks and questions to specialized agents to ensure accurate, specific, and professional responses. The system follows a supervisor framework, where a central Supervisor Agent coordinates the workflow by assigning tasks to the appropriate specialized agents based on context.
+
+## System Configuration
+- Primary LLM: gpt-4o
+- Architecture: state-based graph
+- Search Tool: Tavily Search Tool
+- Memory Checkpointer: SQLiteCheckpointer (for development only)
+- Vector DB: Pinecone
+- Output Validation: Pydantic schemas & structured output parsing
+
+The main purpose of this application is to help users make informed decisions when selecting a health insurance plan and to maximize the benefits of their current policy. It ensures that consumers understand the products they are considering, are aware of their rights, and receive clear, personalized guidance throughout the decision-making process.
+
+
 
 ---
 
