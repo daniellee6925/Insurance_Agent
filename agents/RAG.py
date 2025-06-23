@@ -3,7 +3,7 @@ from langchain_core.tools import tool
 from langchain.schema import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from typing import TypedDict, Annotated, Sequence, Literal, List
+from typing import List, Optional
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import add_messages, StateGraph, END, START
@@ -11,6 +11,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import ToolNode
+
+from llm import llm
+from state import InsuranceAgentState
 
 embedding_function = OpenAIEmbeddings()
 
@@ -31,8 +34,6 @@ db = Chroma.from_documents(docs, embedding_function)
 retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 3})
 
 
-llm = ChatOpenAI(model="gpt-4o")
-
 template = """Answer the question based on the followng context and the ChatHistory. Especially take the latest question into consideration:
 ChatHistory: {history} Context: {contex} Question: {question}"""
 
@@ -41,14 +42,13 @@ prompt = ChatPromptTemplate.from_template(template)
 rag_chain = prompt | llm
 
 
-class AgentState(TypedDict):
-    messages: List[BaseMessage]
-    documents: List[Document]
-    on_topic: str
-    rephrased_question: str
-    proceed_to_generate: bool
-    rephrase_count: int
-    question: HumanMessage
+class RAGAgentState(InsuranceAgentState):
+    documents: List[Document] = Field(default_factory=list)
+    on_topic: Optional[str] = None
+    rephrased_question: Optional[str] = None
+    proceed_to_generate: Optional[bool] = None
+    rephrase_count: int = 0
+    question: Optional[HumanMessage] = None
 
 
 # BaseModel: automatic validation of input types
@@ -60,7 +60,7 @@ class GradeQeustion(BaseModel):
     )  # Field: add meta data
 
 
-def question_rewriter(state: AgentState):
+def question_rewriter(state: RAGAgentState):
     print(f"Entering question_rewrite with the following state: {state}")
 
     # reset the state variable except for 'question' and 'messages'
@@ -79,7 +79,7 @@ def question_rewriter(state: AgentState):
 
     if len(state["messages"]) > 1:
         # might want to rephrase the question
-        conversation = state["essages"][
+        conversation = state["messages"][
             :-1
         ]  # extract everything other than the last message
         current_question = state["question"].content
@@ -102,7 +102,7 @@ def question_rewriter(state: AgentState):
     return state
 
 
-def question_classifier(state: AgentState):
+def question_classifier(state: RAGAgentState):
     print("Entering question_classifier")
     system_message = SystemMessage(
         content="""You are a classifier that determines whether a user's question is about one of the following topics
@@ -129,7 +129,7 @@ def question_classifier(state: AgentState):
     return state
 
 
-def on_topic_router(state: AgentState):
+def on_topic_router(state: RAGAgentState):
     print("Entering on_topic_router")
     on_topic = state.get("on_topic", "").strip().lower()
     if on_topic.lower() == "yes":
@@ -140,7 +140,7 @@ def on_topic_router(state: AgentState):
         return "off_topic_response"
 
 
-def retrieve(state: AgentState):
+def retrieve(state: RAGAgentState):
     print("Entering retrieve")
     documents = retriever.invoke(state["rephrased_question"])
     print(f"retrieve: Retrieved {len(documents)} documents")
@@ -156,7 +156,7 @@ class GradeDocument(BaseModel):
     )  # Field: add meta data
 
 
-def retrieval_grader(state: AgentState):
+def retrieval_grader(state: RAGAgentState):
     print("Entering retrieval_grader")
     system_message = SystemMessage(
         content="""You are a grader assessing the relavence of the retrieved document to a user question. Only Answer with 'YES' or 'NO'.
@@ -181,7 +181,7 @@ def retrieval_grader(state: AgentState):
             f"Grading document: {doc.page_content[:30]}...Result: {result.score.strip()}"
         )
         if result.score.strip().lower() == "yes":
-            relavent_docs.append(docs)
+            relavent_docs.append(doc)
     state["documents"] = relavent_docs
     state["proceed_to_generate"] = (
         len(relavent_docs) > 0
@@ -190,7 +190,7 @@ def retrieval_grader(state: AgentState):
     return state
 
 
-def proceed_router(state: AgentState):
+def proceed_router(state: RAGAgentState):
     print("Entering proceed_router")
     rephrase_count = state.get("rephrase_count", 0)
     if state.get("proceed_to_generate", False):  # if None default to False
@@ -204,7 +204,7 @@ def proceed_router(state: AgentState):
         return "refine_question"
 
 
-def refine_question(state: AgentState):
+def refine_question(state: RAGAgentState):
     print("Entering refine_question")
     rephrase_count = state.get("rephrase_count", 0)
     if rephrase_count >= 2:
@@ -223,12 +223,12 @@ def refine_question(state: AgentState):
     response = llm.invoke(prompt)
     refined_question = response.content.strip()
     print(f"refine_question: Refined question: {refined_question}")
-    state["rephrased_question"] = refine_question
+    state["rephrased_question"] = refined_question
     state["rephrase_count"] = rephrase_count + 1
     return state
 
 
-def generate_answer(state: AgentState):
+def generate_answer(state: RAGAgentState):
     print("Entering generate_answer")
     if "messages" not in state or state["messages"] is None:
         raise ValueError("State must include 'messages' before generating an anaswer.")
@@ -247,7 +247,7 @@ def generate_answer(state: AgentState):
     return state
 
 
-def cannot_answer(state: AgentState):
+def cannot_answer(state: RAGAgentState):
     print("Entering cannot_answer")
     if "messages" not in state or state["messages"] is None:
         state["messages"] = []
@@ -259,7 +259,7 @@ def cannot_answer(state: AgentState):
     return state
 
 
-def off_topic_response(state: AgentState):
+def off_topic_response(state: RAGAgentState):
     print("Entering off_topic_response")
     if "messages" not in state or state["messages"] is None:
         state["messages"] = []
@@ -272,7 +272,7 @@ def off_topic_response(state: AgentState):
 checkpointer = MemorySaver()
 
 
-worklow = StateGraph(AgentState)
+worklow = StateGraph(RAGAgentState)
 worklow.add_node("question_rewriter", question_rewriter)
 worklow.add_node("question_classifier", question_classifier)
 worklow.add_node("off_topic_response", off_topic_response)
@@ -295,13 +295,3 @@ worklow.add_edge("off_topic_response", END)
 worklow.set_entry_point("question_rewriter")
 
 graph = worklow.compile(checkpointer=checkpointer)
-
-
-"""
-input_data = {
-    "question": HumanMessage(
-        content="Ask question here"
-    )
-}
-graph.invoke(input=input_data, config={"configurable" : {"thread_id" : 1}})
-"""
